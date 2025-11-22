@@ -1,0 +1,46 @@
+# Copy this file to terraform.tfvars and fill in your values
+# terraform.tfvars is gitignored and should not be committed
+
+# DigitalOcean API Token
+# Get it from: https://cloud.digitalocean.com/account/api/tokens
+do_token = "your-digitalocean-api-token-here"
+
+# Project configuration
+project_name = "bus-ticketing"
+
+# Droplet configuration
+droplet_region = "nyc1"  # Options: nyc1, nyc3, sfo3, ams3, sgp1, lon1, fra1, tor1, blr1
+droplet_size   = "s-1vcpu-1gb"  # $6/month - Options: s-1vcpu-1gb, s-1vcpu-2gb, etc.
+
+# SSH Keys
+# Get your SSH key fingerprint: ssh-keygen -lf ~/.ssh/id_rsa.pub
+# Or add your SSH key in DigitalOcean dashboard and use the fingerprint
+ssh_key_fingerprints = [
+  "your-ssh-key-fingerprint-here"
+]
+
+# Or use existing SSH key name
+# ssh_key_id = "my-ssh-key"
+
+# Security: Restrict SSH access (recommended)
+# allowed_ssh_ips = ["your.ip.address.here/32"]
+
+# Database
+# MongoDB Atlas connection string or self-hosted MongoDB
+db_url = "mongodb://localhost:27017/busticketing"
+# Or MongoDB Atlas: "mongodb+srv://username:password@cluster.mongodb.net/busticketing?retryWrites=true&w=majority"
+
+# Application ports
+app_port = 3000
+tcp_port = 8080
+
+# Environment
+node_env = "production"
+
+# Domain (optional - leave empty if not using)
+domain_name = ""
+
+# GitHub repository (optional - for auto-deployment)
+# github_repo = "https://github.com/username/repo.git"
+# github_branch = "main"
+
