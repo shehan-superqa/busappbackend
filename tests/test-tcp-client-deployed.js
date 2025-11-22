@@ -1,7 +1,7 @@
 const net = require('net');
 
 // Configuration - Deployed Server
-const HOST = '67.207.90.123'; // Deployed DigitalOcean droplet IP
+const HOST = '157.230.92.146'; // Deployed DigitalOcean droplet IP
 const PORT = 8080; // TCP socket port
 
 // Test data
