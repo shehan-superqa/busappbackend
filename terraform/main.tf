@@ -1,3 +1,6 @@
+# Alternative Terraform configuration using Docker deployment
+# To use this, rename main.tf to main-original.tf and this file to main.tf
+
 terraform {
   required_version = ">= 1.0"
   
@@ -13,7 +16,7 @@ provider "digitalocean" {
   token = var.do_token
 }
 
-# Create Droplet
+# Create Droplet with Docker deployment
 resource "digitalocean_droplet" "app_server" {
   image    = var.droplet_image
   name     = "${var.project_name}-server"
@@ -21,7 +24,7 @@ resource "digitalocean_droplet" "app_server" {
   size     = var.droplet_size
   ssh_keys = var.ssh_key_fingerprints
 
-  user_data = templatefile("${path.module}/user-data.sh", {
+  user_data = templatefile("${path.module}/user-data-docker.sh", {
     db_url        = var.db_url
     port          = var.app_port
     tcp_port      = var.tcp_port

@@ -67,12 +67,11 @@ This directory contains Terraform configuration files to deploy the contactless 
 ## Configuration Options
 
 ### Droplet Sizes
-- `s-1vcpu-512mb-10gb` - **$4/month** (minimum cost - 512MB RAM) ⭐ Recommended for lowest cost
-- `s-1vcpu-1gb` - $6/month (recommended for better performance)
-- `s-1vcpu-2gb` - $12/month
-- `s-2vcpu-2gb` - $18/month
-
-**Note**: The 512MB droplet is optimized for minimal cost. If you experience memory issues or need better performance, upgrade to `s-1vcpu-1gb`.
+- `s-1vcpu-512mb-10gb` - $4/month (512MB RAM, 10GB SSD) - Minimum cost
+- `s-1vcpu-1gb` - $6/month (1GB RAM, 25GB SSD) - Basic
+- `s-1vcpu-2gb` - **$12/month** (2GB RAM, 50GB SSD) ⭐ Recommended - Good balance
+- `s-2vcpu-2gb` - $18/month (2GB RAM, 50GB SSD, 2 vCPU) - Better CPU
+- `s-2vcpu-4gb` - $24/month (4GB RAM, 80GB SSD, 2 vCPU) - High performance
 
 ### Regions
 Popular options:

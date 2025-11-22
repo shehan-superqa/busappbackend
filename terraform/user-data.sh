@@ -1,159 +1,187 @@
 #!/bin/bash
 
-# Enable logging (but don't exit on errors - we want to complete setup)
-exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+# Enable comprehensive logging - DO NOT EXIT ON ERRORS
+exec > >(tee -a /var/log/user-data.log) 2>&1
+set -x  # Debug mode
 
-# Set PATH early to ensure commands are found
-export PATH=$PATH:/usr/local/bin:/usr/bin:/bin
+# Set PATH early and comprehensively
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export DEBIAN_FRONTEND=noninteractive
 
 echo "=========================================="
-echo "Starting server setup..."
+echo "Starting server setup - $(date)"
 echo "=========================================="
+echo ""
 
 # Update system
-echo "[1/10] Updating system packages..."
-export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get upgrade -y -qq
+echo "[1/12] Updating system packages..."
+apt-get update || true
+apt-get upgrade -y || true
+
+# Install essential packages
+echo "[2/12] Installing essential packages..."
+apt-get install -y curl wget git build-essential || true
 
 # Install Node.js 18.x
-echo "[2/10] Installing Node.js 18.x..."
-curl -fsSL https://deb.nodesource.com/setup_18.x | bash - > /dev/null 2>&1
-apt-get install -y nodejs -qq
-
-# Verify Node.js installation
-if ! command -v node &> /dev/null; then
-    echo "ERROR: Node.js installation failed!"
-    exit 1
-fi
-echo "Node.js version: $(node --version)"
-
-# Install PM2 globally
-echo "[3/10] Installing PM2..."
-npm install -g pm2 > /dev/null 2>&1 || {
-    echo "WARNING: npm install pm2 had issues, trying again..."
-    sleep 2
-    npm install -g pm2
+echo "[3/12] Installing Node.js 18.x..."
+curl -fsSL https://deb.nodesource.com/setup_18.x | bash - || {
+    echo "NodeSource setup failed, trying alternative..."
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+}
+apt-get install -y nodejs || {
+    echo "Node.js install failed, retrying..."
+    apt-get install -y nodejs
 }
 
-# Verify PM2 installation and ensure it's in PATH
-export PATH=$PATH:/usr/local/bin:/usr/bin
-sleep 1  # Give npm time to finish
+# Verify and wait for Node.js
+sleep 2
+if ! command -v node &> /dev/null; then
+    echo "ERROR: Node.js not found, but continuing..."
+else
+    echo "✓ Node.js: $(node --version)"
+    echo "✓ npm: $(npm --version)"
+fi
 
-# Verify PM2 is available
+# Install PM2 - MULTIPLE METHODS
+echo "[4/12] Installing PM2 (Method 1: npm install)..."
+npm install -g pm2 2>&1 || {
+    echo "PM2 install failed, retrying..."
+    sleep 3
+    npm install -g pm2 2>&1
+}
+
+# Wait for npm to finish
+sleep 5
+
+# Update PATH
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Check if PM2 is available
 if ! command -v pm2 &> /dev/null; then
-    echo "ERROR: PM2 installation failed! Trying to locate..."
-    # Try to find where npm installed it
-    PM2_PATH=$(find /usr -name pm2 2>/dev/null | head -1)
-    if [ -n "$PM2_PATH" ]; then
-        ln -s "$PM2_PATH" /usr/local/bin/pm2 2>/dev/null || true
-        export PATH=$PATH:$(dirname "$PM2_PATH")
+    echo "[5/12] PM2 not in PATH, searching and creating symlink..."
+    
+    # Find PM2
+    PM2_FOUND=$(find /usr -name pm2 -type f 2>/dev/null | grep -E "(bin|node_modules)" | head -1)
+    
+    if [ -z "$PM2_FOUND" ]; then
+        # Try npm root
+        NPM_ROOT=$(npm root -g 2>/dev/null || echo "/usr/lib/node_modules")
+        PM2_FOUND="$NPM_ROOT/pm2/bin/pm2"
     fi
     
-    if ! command -v pm2 &> /dev/null; then
-        echo "ERROR: PM2 still not found after retry!"
-        # Don't exit - continue and try to fix later
+    if [ -f "$PM2_FOUND" ]; then
+        echo "Found PM2 at: $PM2_FOUND"
+        ln -sf "$PM2_FOUND" /usr/local/bin/pm2 2>/dev/null || true
+        ln -sf "$PM2_FOUND" /usr/bin/pm2 2>/dev/null || true
     else
-        echo "PM2 found and linked"
+        echo "PM2 not found, trying to reinstall..."
+        npm cache clean --force 2>/dev/null || true
+        npm install -g pm2 --force 2>&1
+        sleep 5
+        
+        # Try again
+        PM2_FOUND=$(find /usr -name pm2 -type f 2>/dev/null | head -1)
+        if [ -f "$PM2_FOUND" ]; then
+            ln -sf "$PM2_FOUND" /usr/local/bin/pm2 2>/dev/null || true
+            ln -sf "$PM2_FOUND" /usr/bin/pm2 2>/dev/null || true
+        fi
     fi
 fi
+
+# Create PM2 wrapper script as last resort
+if ! command -v pm2 &> /dev/null; then
+    echo "[6/12] Creating PM2 wrapper script..."
+    cat > /usr/local/bin/pm2 <<'PM2EOF'
+#!/bin/bash
+NPM_ROOT=$(npm root -g 2>/dev/null || echo "/usr/lib/node_modules")
+PM2_BIN="$NPM_ROOT/pm2/bin/pm2"
+if [ -f "$PM2_BIN" ]; then
+    exec "$PM2_BIN" "$@"
+else
+    echo "PM2 not found at $PM2_BIN"
+    exit 1
+fi
+PM2EOF
+    chmod +x /usr/local/bin/pm2
+    export PATH=$PATH:/usr/local/bin
+fi
+
+# Final PM2 verification
+echo "[7/12] Verifying PM2 installation..."
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+sleep 2
 
 if command -v pm2 &> /dev/null; then
-    echo "PM2 version: $(pm2 --version)"
+    echo "✓ PM2 is available: $(which pm2)"
+    pm2 --version || echo "PM2 found but version check failed"
 else
-    echo "WARNING: PM2 command not available, but continuing..."
+    echo "✗ PM2 still not available, but continuing setup..."
+    echo "You may need to install PM2 manually: npm install -g pm2"
 fi
 
-# Install Git
-echo "[4/10] Installing Git..."
-apt-get install -y git -qq
-
-# Install Nginx (optional, for reverse proxy) - Only if domain is configured
-# Nginx will be installed later if domain_name is provided to save memory
-
 # Create application directory
-echo "[5/10] Setting up application directory..."
+echo "[8/12] Setting up application directory..."
 mkdir -p /opt/${project_name}
-cd /opt/${project_name}
+cd /opt/${project_name} || exit 1
 
-# Clone repository if GitHub repo is provided
+# Clone repository
 if [ -n "${github_repo}" ]; then
-  echo "Cloning repository from ${github_repo} (branch: ${github_branch})..."
+  echo "[9/12] Cloning repository..."
   
-  # Retry cloning up to 3 times
-  MAX_RETRIES=3
-  RETRY_COUNT=0
-  CLONE_SUCCESS=false
-  
-  while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+  MAX_RETRIES=5
+  RETRY=0
+  while [ $RETRY -lt $MAX_RETRIES ]; do
     if git clone -b ${github_branch} ${github_repo} . 2>&1; then
-      CLONE_SUCCESS=true
       break
-    else
-      RETRY_COUNT=$((RETRY_COUNT + 1))
-      echo "Clone attempt $RETRY_COUNT failed, retrying in 5 seconds..."
-      sleep 5
-      rm -rf * .[^.]* 2>/dev/null || true  # Clean up failed clone
     fi
+    RETRY=$((RETRY + 1))
+    echo "Clone attempt $RETRY failed, retrying..."
+    sleep 5
+    rm -rf * .[^.]* 2>/dev/null || true
   done
   
-  if [ "$CLONE_SUCCESS" = true ]; then
-    # If server code is in a 'server' subdirectory, move it to root
-    if [ -d "server" ] && [ -f "server/package.json" ]; then
-      echo "Server code found in 'server' subdirectory, moving to root..."
-      mv server/* .
-      mv server/.* . 2>/dev/null || true
-      rmdir server 2>/dev/null || true
-    fi
-    
-    if [ -f "package.json" ]; then
-      echo "Repository cloned successfully"
-    else
-      echo "WARNING: package.json not found after cloning, but continuing..."
-    fi
-  else
-    echo "ERROR: Failed to clone repository after $MAX_RETRIES attempts!"
-    echo "You may need to clone manually or check repository access."
+  # Move server code if in subdirectory
+  if [ -d "server" ] && [ -f "server/package.json" ]; then
+    echo "Moving server code to root..."
+    mv server/* . 2>/dev/null || true
+    mv server/.* . 2>/dev/null || true
+    rmdir server 2>/dev/null || true
   fi
+  
+  if [ ! -f "package.json" ]; then
+    echo "ERROR: package.json not found!"
+    exit 1
+  fi
+  echo "✓ Repository cloned"
 else
-  # Create a placeholder - you'll need to upload your code manually
-  echo "WARNING: GitHub repo not provided. Please upload your code manually to /opt/${project_name}"
+  echo "ERROR: GitHub repo not provided!"
+  exit 1
 fi
 
 # Create .env file
-echo "[6/10] Creating .env file..."
+echo "[10/12] Creating .env file..."
 cat > /opt/${project_name}/.env <<EOF
 PORT=${port}
 TCP_PORT=${tcp_port}
 NODE_ENV=${node_env}
 DB_URL=${db_url}
 EOF
-echo ".env file created"
+echo "✓ .env created"
 
 # Install dependencies
-if [ -f /opt/${project_name}/package.json ]; then
-  echo "[7/10] Installing npm dependencies..."
-  cd /opt/${project_name}
-  
-  # Retry npm install if it fails
-  if ! npm install --production --no-audit --no-fund 2>&1; then
-    echo "WARNING: npm install had issues, retrying..."
+echo "[11/12] Installing npm dependencies..."
+cd /opt/${project_name}
+npm install --production --no-audit --no-fund 2>&1 || {
+    echo "npm install failed, retrying..."
     sleep 3
-    npm install --production --no-audit --no-fund || {
-      echo "ERROR: npm install failed after retry, but continuing..."
-    }
-  fi
-  
-  if [ -d "node_modules" ]; then
-    echo "Dependencies installed successfully"
-  else
-    echo "WARNING: node_modules directory not found after install"
-  fi
-else
-  echo "WARNING: package.json not found, skipping npm install"
+    npm install --production --no-audit --no-fund 2>&1
+}
+
+if [ ! -d "node_modules" ]; then
+    echo "WARNING: node_modules not found!"
 fi
 
-# Create PM2 ecosystem file (optimized for minimal resources)
+# Create PM2 ecosystem file
 cat > /opt/${project_name}/ecosystem.config.js <<EOF
 module.exports = {
   apps: [{
@@ -177,153 +205,59 @@ module.exports = {
 EOF
 
 # Start application with PM2
-if [ -f /opt/${project_name}/server.js ]; then
-  echo "[8/10] Starting application with PM2..."
-  cd /opt/${project_name}
-  
-  # Ensure PM2 is in PATH
-  export PATH=$PATH:/usr/local/bin:/usr/bin
-  
-  # Wait a moment to ensure PM2 is ready
-  sleep 2
-  
-  # Start the application (retry if needed)
-  if command -v pm2 &> /dev/null; then
-    # Stop any existing instance first
-    pm2 delete ${project_name} 2>/dev/null || true
-    pm2 kill 2>/dev/null || true
-    sleep 1
-    
-    # Start PM2 daemon if not running
-    pm2 ping || pm2 kill && sleep 1
-    
-    # Start the application
-    if pm2 start ecosystem.config.js 2>&1; then
-      echo "PM2 start command executed"
-      
-      # Save PM2 process list
-      sleep 2
-      pm2 save 2>&1 || {
-        echo "WARNING: Failed to save PM2 process list, but continuing..."
-      }
-      
-      # Setup PM2 startup script (non-blocking)
-      pm2 startup systemd -u root --hp /root 2>&1 | tail -1 | bash 2>/dev/null || {
-        echo "WARNING: Failed to setup PM2 startup script, but continuing..."
-      }
-      
-      # Wait for the app to start
-      sleep 5
-      
-      # Verify PM2 status
-      if pm2 list 2>/dev/null | grep -q "${project_name}.*online"; then
-        echo "✓ Application started successfully with PM2"
-      else
-        echo "WARNING: Application may not be online yet. Checking status..."
+echo "[12/12] Starting application..."
+cd /opt/${project_name}
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+if [ -f "server.js" ]; then
+    # Try to start with PM2
+    if command -v pm2 &> /dev/null; then
+        pm2 kill 2>/dev/null || true
+        sleep 2
+        pm2 start ecosystem.config.js 2>&1
+        sleep 3
+        pm2 save 2>&1 || true
+        
+        # Setup startup
+        STARTUP_CMD=$(pm2 startup systemd -u root --hp /root 2>&1 | tail -1)
+        if [ -n "$STARTUP_CMD" ] && [ "$STARTUP_CMD" != "PM2" ]; then
+            eval "$STARTUP_CMD" 2>&1 || true
+        fi
+        
         pm2 list
-        echo "Check logs with: pm2 logs ${project_name}"
-      fi
     else
-      echo "ERROR: Failed to start application with PM2!"
-      echo "Attempting to start directly with node to see errors..."
-      node server.js &
-      sleep 2
+        echo "PM2 not available, starting with node directly..."
+        nohup node server.js > /var/log/${project_name}-direct.log 2>&1 &
     fi
-  else
-    echo "ERROR: PM2 command not available! Starting with node directly..."
-    nohup node server.js > /var/log/${project_name}-direct.log 2>&1 &
-    echo "Application started with node (not PM2)"
-  fi
 else
-  echo "WARNING: server.js not found, skipping PM2 start"
-  echo "Files in directory:"
-  ls -la /opt/${project_name}/ 2>/dev/null || true
+    echo "ERROR: server.js not found!"
+    ls -la
 fi
 
-# Configure Nginx as reverse proxy (optional)
-if [ -n "${domain_name}" ]; then
-  # Install Nginx if domain is configured
-  apt-get install -y nginx
-  
-  cat > /etc/nginx/sites-available/${project_name} <<EOF
-server {
-    listen 80;
-    server_name ${domain_name};
+# Configure firewall
+echo "Configuring firewall..."
+ufw --force allow 22/tcp 2>/dev/null || true
+ufw --force allow ${port}/tcp 2>/dev/null || true
+ufw --force allow ${tcp_port}/tcp 2>/dev/null || true
+ufw --force enable 2>/dev/null || true
 
-    location / {
-        proxy_pass http://localhost:${port};
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-}
-EOF
-
-  ln -s /etc/nginx/sites-available/${project_name} /etc/nginx/sites-enabled/
-  rm /etc/nginx/sites-enabled/default
-  nginx -t && systemctl restart nginx
-fi
-
-# Setup firewall (UFW)
-echo "[9/10] Configuring firewall..."
-ufw --force allow 22/tcp > /dev/null 2>&1
-ufw --force allow ${port}/tcp > /dev/null 2>&1
-ufw --force allow ${tcp_port}/tcp > /dev/null 2>&1
-ufw --force enable > /dev/null 2>&1
-echo "Firewall configured"
-
-# Final verification
-echo "[10/10] Verifying setup..."
+# Final status
 echo ""
 echo "=========================================="
-echo "Setup Summary"
+echo "Setup Complete - $(date)"
 echo "=========================================="
-echo "Node.js: $(node --version 2>/dev/null || echo 'Not found')"
-echo "PM2: $(pm2 --version 2>/dev/null || echo 'Not found')"
-echo "Application directory: /opt/${project_name}"
-if [ -f /opt/${project_name}/server.js ]; then
-  echo "Server file: ✓ Found"
-else
-  echo "Server file: ✗ Not found"
-fi
-
-# Check if PM2 is running the app
-export PATH=$PATH:/usr/local/bin:/usr/bin
+echo "Node.js: $(node --version 2>/dev/null || echo 'NOT FOUND')"
+echo "PM2: $(pm2 --version 2>/dev/null || echo 'NOT FOUND - Run: npm install -g pm2')"
+echo "PM2 Path: $(which pm2 2>/dev/null || echo 'NOT FOUND')"
+echo ""
 if command -v pm2 &> /dev/null; then
-  echo ""
-  echo "PM2 Status:"
-  pm2 list 2>/dev/null || echo "PM2 not running any processes"
-  
-  # Final check - try to ensure app is running
-  if ! pm2 list 2>/dev/null | grep -q "${project_name}.*online"; then
-    echo ""
-    echo "Application not showing as online, attempting final start..."
-    cd /opt/${project_name} 2>/dev/null
-    if [ -f "ecosystem.config.js" ]; then
-      pm2 delete ${project_name} 2>/dev/null || true
-      pm2 start ecosystem.config.js 2>/dev/null
-      pm2 save 2>/dev/null
-      sleep 3
-      pm2 list
-    fi
-  fi
+    echo "PM2 Status:"
+    pm2 list 2>&1 || echo "PM2 list failed"
+else
+    echo "PM2 is NOT installed. To install manually:"
+    echo "  npm install -g pm2"
+    echo "  pm2 start /opt/${project_name}/ecosystem.config.js"
 fi
-
 echo ""
+echo "Check logs: /var/log/user-data.log"
 echo "=========================================="
-echo "Setup completed!"
-echo "=========================================="
-echo ""
-echo "Next steps:"
-echo "1. SSH into the server: ssh root@<droplet-ip>"
-echo "2. Check application status: pm2 status"
-echo "3. View logs: pm2 logs ${project_name}"
-echo "4. Test HTTP endpoint: curl http://localhost:${port}/health"
-echo ""
-echo "Logs are saved to: /var/log/user-data.log"
-
