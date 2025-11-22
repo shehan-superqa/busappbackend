@@ -3,8 +3,8 @@ const mongoose = require('mongoose');
 const passengerSchema = new mongoose.Schema({
   cardId: {
     type: String,
-    required: true,
-    index: true
+    required: true
+    // Note: Cannot index array fields in timeseries collections
   },
   timestamp: {
     type: Number,
@@ -26,13 +26,12 @@ const locationSchema = new mongoose.Schema({
 const deviceDataSchema = new mongoose.Schema({
   deviceId: {
     type: String,
-    required: true,
-    index: true
+    required: true
+    // Indexed via metaField in timeseries config
   },
   timestamp: {
     type: Number,
-    required: true,
-    index: true
+    required: true
   },
   passengers: {
     type: [passengerSchema],
@@ -46,16 +45,29 @@ const deviceDataSchema = new mongoose.Schema({
   serverReceivedAt: {
     type: Date,
     default: Date.now,
-    index: true
+    required: true
+  },
+  createdtime: {
+    type: Date,
+    default: Date.now,
+    required: true
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  // Configure as timeseries collection
+  timeseries: {
+    timeField: 'createdtime',
+    metaField: 'deviceId',
+    granularity: 'seconds'
+  }
 });
 
-// Indexes for better query performance
-deviceDataSchema.index({ deviceId: 1, timestamp: -1 });
-deviceDataSchema.index({ 'passengers.cardId': 1, timestamp: -1 });
-deviceDataSchema.index({ serverReceivedAt: -1 });
+// Note: In timeseries collections:
+// - metaField (deviceId) is automatically indexed
+// - timeField (createdtime) is automatically indexed
+// - Array fields (like passengers) cannot be indexed
+// - Do not create explicit indexes on array fields or it will cause errors
 
-module.exports = mongoose.model('DeviceData', deviceDataSchema);
+// Use the 'sensoridata' collection name
+module.exports = mongoose.model('DeviceData', deviceDataSchema, 'sensoridata');
 

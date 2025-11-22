@@ -67,9 +67,12 @@ This directory contains Terraform configuration files to deploy the contactless 
 ## Configuration Options
 
 ### Droplet Sizes
-- `s-1vcpu-1gb` - $6/month (recommended for testing)
+- `s-1vcpu-512mb-10gb` - **$4/month** (minimum cost - 512MB RAM) ⭐ Recommended for lowest cost
+- `s-1vcpu-1gb` - $6/month (recommended for better performance)
 - `s-1vcpu-2gb` - $12/month
 - `s-2vcpu-2gb` - $18/month
+
+**Note**: The 512MB droplet is optimized for minimal cost. If you experience memory issues or need better performance, upgrade to `s-1vcpu-1gb`.
 
 ### Regions
 Popular options:
@@ -82,9 +85,10 @@ Popular options:
 ## Deployment Methods
 
 ### Method 1: GitHub Auto-Deployment (Recommended)
-1. Push your code to GitHub
-2. Set `github_repo` and `github_branch` in `terraform.tfvars`
-3. The server will automatically clone and deploy your code
+1. Push your code to GitHub (repository: `https://github.com/shehan-superqa/busappbackend.git`)
+2. The `terraform.tfvars.example` already includes the GitHub repository URL
+3. When you create `terraform.tfvars`, the server will automatically clone and deploy your code
+4. If your server code is in a `server` subdirectory, it will be automatically moved to the root
 
 ### Method 2: Manual Deployment
 1. Deploy the infrastructure with Terraform
@@ -176,9 +180,17 @@ terraform destroy
 
 ## Cost Estimation
 
+### Minimum Cost Configuration (Recommended)
+- Droplet (s-1vcpu-512mb-10gb): **$4/month**
+- MongoDB Atlas (free tier): $0/month
+- **Total: ~$4/month** 💰
+
+### Standard Configuration
 - Droplet (s-1vcpu-1gb): $6/month
 - MongoDB Atlas (free tier): $0/month
 - **Total: ~$6/month**
+
+**Note**: The minimum configuration uses 512MB RAM which is sufficient for small to medium applications. The system is optimized with Node.js memory limits and PM2 configuration to work efficiently on this droplet size.
 
 ## Security Recommendations
 

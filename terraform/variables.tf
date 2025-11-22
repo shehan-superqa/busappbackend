@@ -25,7 +25,7 @@ variable "droplet_region" {
 variable "droplet_size" {
   description = "Droplet size"
   type        = string
-  default     = "s-1vcpu-1gb" # $6/month
+  default     = "s-1vcpu-512mb-10gb" # $4/month - Minimum cost option
 }
 
 variable "ssh_key_fingerprints" {

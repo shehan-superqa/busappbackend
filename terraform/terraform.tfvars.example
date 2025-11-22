@@ -10,7 +10,8 @@ project_name = "bus-ticketing"
 
 # Droplet configuration
 droplet_region = "nyc1"  # Options: nyc1, nyc3, sfo3, ams3, sgp1, lon1, fra1, tor1, blr1
-droplet_size   = "s-1vcpu-1gb"  # $6/month - Options: s-1vcpu-1gb, s-1vcpu-2gb, etc.
+droplet_size   = "s-1vcpu-512mb-10gb"  # $4/month - Minimum cost option (512MB RAM)
+# Note: For better performance, consider s-1vcpu-1gb ($6/month) if you experience memory issues
 
 # SSH Keys
 # Get your SSH key fingerprint: ssh-keygen -lf ~/.ssh/id_rsa.pub
@@ -41,6 +42,6 @@ node_env = "production"
 domain_name = ""
 
 # GitHub repository (optional - for auto-deployment)
-# github_repo = "https://github.com/username/repo.git"
-# github_branch = "main"
+github_repo = "https://github.com/shehan-superqa/busappbackend.git"
+github_branch = "main"
 

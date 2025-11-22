@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.DB_URL || 'mongodb://localhost:27017/busticketing', {
+    const conn = await mongoose.connect(process.env.DB_URL || 'mongodb://localhost:27017/vehiclerun', {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });

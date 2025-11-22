@@ -29,6 +29,7 @@ resource "digitalocean_droplet" "app_server" {
     project_name  = var.project_name
     github_repo   = var.github_repo
     github_branch = var.github_branch
+    domain_name   = var.domain_name
   })
 
   tags = [var.project_name]

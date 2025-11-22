@@ -14,8 +14,8 @@ npm install -g pm2
 # Install Git
 apt-get install -y git
 
-# Install Nginx (optional, for reverse proxy)
-apt-get install -y nginx
+# Install Nginx (optional, for reverse proxy) - Only if domain is configured
+# Nginx will be installed later if domain_name is provided to save memory
 
 # Create application directory
 mkdir -p /opt/${project_name}
@@ -24,6 +24,14 @@ cd /opt/${project_name}
 # Clone repository if GitHub repo is provided
 if [ -n "${github_repo}" ]; then
   git clone -b ${github_branch} ${github_repo} .
+  
+  # If server code is in a 'server' subdirectory, move it to root
+  if [ -d "server" ] && [ -f "server/package.json" ]; then
+    echo "Server code found in 'server' subdirectory, moving to root..."
+    mv server/* .
+    mv server/.* . 2>/dev/null || true
+    rmdir server 2>/dev/null || true
+  fi
 else
   # Create a placeholder - you'll need to upload your code manually
   echo "GitHub repo not provided. Please upload your code manually to /opt/${project_name}"
@@ -43,7 +51,7 @@ if [ -f /opt/${project_name}/package.json ]; then
   npm install --production
 fi
 
-# Create PM2 ecosystem file
+# Create PM2 ecosystem file (optimized for minimal resources)
 cat > /opt/${project_name}/ecosystem.config.js <<EOF
 module.exports = {
   apps: [{
@@ -52,7 +60,8 @@ module.exports = {
     instances: 1,
     autorestart: true,
     watch: false,
-    max_memory_restart: '500M',
+    max_memory_restart: '300M',
+    node_args: '--max-old-space-size=256',
     env: {
       NODE_ENV: '${node_env}',
       PORT: ${port},
@@ -75,6 +84,9 @@ fi
 
 # Configure Nginx as reverse proxy (optional)
 if [ -n "${domain_name}" ]; then
+  # Install Nginx if domain is configured
+  apt-get install -y nginx
+  
   cat > /etc/nginx/sites-available/${project_name} <<EOF
 server {
     listen 80;

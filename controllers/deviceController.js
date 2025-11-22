@@ -74,12 +74,14 @@ exports.createDeviceData = async (req, res, next) => {
       });
     }
     
+    const now = new Date();
     const deviceData = new DeviceData({
       deviceId,
       timestamp,
       passengers,
       location,
-      serverReceivedAt: new Date()
+      serverReceivedAt: now,
+      createdtime: now
     });
     
     await deviceData.save();

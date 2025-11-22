@@ -65,8 +65,8 @@ class TCPServer {
       console.error('[TCP] Server error:', error.message);
     });
 
-    this.server.listen(this.port, () => {
-      console.log(`[TCP] Server listening on port ${this.port}`);
+    this.server.listen(this.port, '0.0.0.0', () => {
+      console.log(`[TCP] Server listening on 0.0.0.0:${this.port}`);
     });
   }
 
@@ -119,12 +119,14 @@ class TCPServer {
       console.log('[TCP] Received data:', JSON.stringify(data, null, 2));
       
       // Create device data document
+      const now = new Date();
       const deviceData = new DeviceData({
         deviceId: data.deviceId,
         timestamp: data.timestamp,
         passengers: data.passengers,
         location: data.location,
-        serverReceivedAt: new Date()
+        serverReceivedAt: now,
+        createdtime: now
       });
       
       // Save to database
